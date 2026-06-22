@@ -380,3 +380,7 @@ Dimensionare correttamente il thread pool è fondamentale per massimizzare le pe
 ## [Assignment-01](./assignment01.md)
 
 ### [Report](./report1.pdf)
+
+---
+
+## [Index](/index.md)

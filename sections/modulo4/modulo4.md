@@ -282,3 +282,7 @@ In questo paradigma, lo scambio di informazioni non avviene tramite chiamate dir
 ## [Assignment-04](./assignment04.md)
 
 ### [Report](./report4.pdf)
+
+---
+
+## [Index](/index.md)

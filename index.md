@@ -1,4 +1,4 @@
-# Teoria Programmazione Concorrente e Distribuita (PCD)
+# Indice
 
 * [Modulo 1: Multithreading and Fundamentals](/sections/modulo1/modulo1.md)
   * [Assignment 1: Poool](/sections/modulo1/assignment01.md)
