@@ -250,7 +250,3 @@ Il **Pinning** è una **situazione critica** in cui un **Virtual Thread**, pur i
 ## [Assignment-02](./assignment02.md)
 
 ### [Report](./report2.pdf)
-
----
-
-## [Index](/index.md)
