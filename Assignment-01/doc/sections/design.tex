@@ -1,0 +1,49 @@
+\section{Design e Implementazione}
+È stata progettata un'architettura modulare e scalabile, con particolare attenzione alla gestione, al riuso della logica di gioco e della View.
+Il package \emph{common} contiene il dominio condiviso, in modo che le due versioni \texttt{V1} e \texttt{V2} possano differire solo per il \textbf{Controller} e l'implementazione del \textbf{CollisionResolver}, difatto in fase di bootstrap, possono essere specificati, oltre alla strategia di generazione delle palline.
+
+\subsection{Architettura del Sistema (MVC e Observer)}
+L'implementazione per una visualizzazione reattiva \ref{sec:analisi_edt}, riprende \texttt{sketch02} e si basa su \textbf{Model-View-Controller (MVC)} con pattern \textbf{Observer}.
+
+Per garantire la thread-safety, la rappresentazione visuale passa attraverso un \textbf{ViewModel}. Esso viene frequentemente aggiornato con dati differenti, rendendo cosi separati i dati dei model, soggetti ad update frequenti, e sincronizzazioni tra i vari thread.
+In questo modo la View legge una vista coerente senza accedere direttamente alle strutture mutabili interne ai modelli.
+
+\subsection{Gestione asincrona degli Eventi e Game Loop}
+I \textbf{Controller} sono stati progettati per aggiornare in maniera costante la logica di gioco, gestire gli input e notificare la View.
+
+Nella versione implementata con meccanismi low-level \texttt{V1}, usa \textbf{ActiveController}, il thread utilizza un \textbf{BoundedBuffer}, di dimensione limitata, per ricevere i comandi di gioco (input del giocatore).
+Il controller non resta bloccato indefinitamente su una \emph{get()}, utilizza invece \emph{poll(waitMs)}.
+
+Se un \textbf{GameCommand} è presente in coda, il comando viene eseguito; altrimenti il loop avanza sequenzialmente. In questo modo input e simulazione convivono nello stesso thread logico mantenendo una cadenza stabile.
+
+La versione \texttt{V2} con \textbf{ExecutorController} mantiene un loop concettualmente simile, facendo però uso di costrutti high-level.
+Ad esempio, al posto di \emph{BoundedBuffer} per i comandi, viene utilizzato \textbf{ConcurrentLinkedQueue}, usando \emph{offer} che a differenza della \emph{put} non è bloccante.
+
+\subsection{Concorrenza delle Collisioni}
+La risoluzione collisioni su $N$ palline è il punto in cui la concorrenza produce il massimo impatto, ma anche i principali rischi di contesa.
+L'interfaccia \emph{resolveCollisions} è implementata in diverse versioni, di cui concorrenti: \textbf{MultithreadingCollisions} e \textbf{ExecutorCollisions}, mentre \textbf{SequentialCollisions} è la versione non concorrente, implementata in \texttt{sketch01}.
+
+\subsubsection{Sincronizzazione tramite Barriera }
+L'implementazione della classe \texttt{MultithreadingCollisions} implementata nella versione \texttt{V1}, utilizza meccanismi di low-level. I thread vengono istanziati una sola volta all'avvio e tenuti sempre in attesa tramite un ciclo continuo. 
+Per coordinarli in modo sicuro con il game loop principale, sono state utilizzate due barriere cicliche.
+La prima barriera funziona come un cancello di partenza, bloccando i worker finché il master non ha preparato e condiviso i dati del nuovo frame. Appena ricevono il via tramite la funzione \textbf{hitAndWaitAll()}, i thread si spartiscono in modo deterministico la lista delle palline elaborando le collisioni parallelamente, lavorando su porzioni separate senza ostacolarsi su strutture condivise.
+
+Calcolate tutte le coppie di collisioni assegnate, ogni thread si ferma sulla seconda barriera. Solo quando tutti i partecipanti raggiungono questo traguardo finale, il master ha la certezza che la fisica del frame è completa e sblocca il ciclo per procedere al rendering. Questo design azzera l'enorme peso sul sistema operativo e sul Garbage Collector, permettendo al gioco di mantenere un frame rate fluido anche nella configurazione con migliaia di palline.
+
+La \textbf{CyclicBarrier} è stata implementata sfruttando direttamente i monitor nativi di Java tramite i metodi \textbf{synchronized}, \textbf{wait()} e \textbf{notifyAll()}. La classe tiene traccia di quanti thread sono attesi, quanti sono effettivamente arrivati e a quale ciclo di esecuzione ci troviamo. Quando un worker arriva alla barriera, incrementa il contatore. Se mancano ancora altri thread all'appello, si mette in \textbf{wait()}, all'interno di un ciclo \textbf{while}, fondamentale per evitare che il thread riparta per sbaglio a causa di un risveglio spurio. Appena l'ultimo thread completa il suo lavoro, la barriera si resetta (definiamo cosi una \emph{barriera ciclica}), e chiama un \textbf{notifyAll()} per svegliare tutti i worker in attesa, facendoli ripartire.
+
+\subsubsection{Ottimizzazione Locale}
+La funzione \texttt{Ball.checkAndResolveCollisionSafe} esegue prima un pre-check geometrico senza lock. Questa scelta scarta il maggior numero di coppie, considerando solo quelle vicine. Riducendo così il numero di lock inutili su coppie sicuramente non in collisione.
+
+\subsubsection{Lock Ordering: prevenzione da Deadlock}
+Le collisioni deveno essere risolte garantendo la sezione critica su entrambe le palline, e più thread potrebbero tentare lock multipli in ordine inverso. Per evitare deadlock si applica un criterio deterministico di \textbf{Lock Ordering}.
+Si confronta l'hash d'istanza della JVM fornito dal metodo:
+\begin{verbatim}
+if (System.identityHashCode(first) < System.identityHashCode(second))
+\end{verbatim}
+Ogni thread acquisisce prima il lock della pallina con identificativo inferiore e poi il secondo lock, in questo modo si elimina la possibilità di attese circolari.
+
+\subsection{L'approccio Task-based, con meccanismi high-level}
+L'evoluzione finale adotta un modello task-based utilizzando il Framework Java Executor. Vengono create micro-task e assegnate a un pool fisso di worker, la logica di suddivisione tra le coppie rimane la stessa della versione in \texttt{MultithreadingCollisions}. Ogni task elabora parallelamente e la sincronizzazione globale è ridotta alla sola barriera finale (\textbf{invokeAll}), tornando poi al flusso della Logica principale.
+
+Questa scelta riduce sensibilmente la contesa sui monitor e sfrutta meglio i core disponibili, i meccanismi di high-level, riducono il rischio di errori di sincronizzazione, migliorano la manutenibilità del codice, e possiamo notare anche un miglioramento nella fluidità generale del gioco \ref{sec:benchmark_risultati}.

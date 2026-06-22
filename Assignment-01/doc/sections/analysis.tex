@@ -1,0 +1,24 @@
+\section{Analisi del Problema}
+L'implementazione di \emph{Poool} nasce dall'unione dei due sketch: \texttt{sketch01}, orientato alla logica sequenziale, mentre \texttt{sketch02}, orientato all'interazione asincrona in architettura MVC. 
+Durante questa integrazione sono emerse alcune criticità:
+
+\subsection{Input asincroni e reattività dell'EDT}
+\label{sec:analisi_edt}
+\textbf{L'Event Dispatch Thread (EDT)} di Swing deve restare reattivo: ogni operazione bloccante sull'EDT produce freeze percepibili della GUI. È necessario l'utilizzo di un thread separato, per garantire sia l'aggiornamento della View, sia la gestione degli input asincroni.
+
+Il problema è risolto tramite l'architettura MVC con observer: implementando un \textbf{Controller} in cui i comandi utente devono essere trasferiti dalla View ad esso senza perdere eventi e senza introdurre attese indefinite. 
+Nello \texttt{sketch02} viene utilizzato un \textbf{AutonomousUpdater}, un thread dedicato ad aggiornare periodicamente lo stato di un Counter. Ho trovato similarità tra questo pattern e la necessità di un loop di gioco che avanzi a cadenza regolare, indipendentemente dagli input.
+
+\subsection{Parallelizzazione delle collisioni}
+La fase più costosa del motore è la risoluzione delle collisioni tra palline, basata su confronti a coppie. Con $n$ palline, il costo cresce quadraticamente come $ \mathcal{O}(n^2) $.
+Negli scenari ad alta densità (la configurazione \textbf{massive}: 4500 palline), un calcolo sequenziale non riesce a mantenere la stessa fluidità dei casi con meno palline, rendendo necessaria una parallelizzazione mirata del solo sottoproblema delle collisioni.
+Un primo approccio efficace alla parallelizzazione consiste nella partizione della lista di palline, garantendo uniformità al calcolo delle collisioni tra i thread worker simultanei.
+
+\subsubsection*{Coordinamento e Coerenza}
+Parallelizzare le collisioni assegnando blocchi di palline a thread worker è solo una parte della soluzione; è necessario anche coordinare i thread per garantire che il game loop resti coerente.
+Affinché il rendering mostri uno stato complessivo corretto e veritiero risulta fondamentale imporre un punto di ritrovo o attesa condiviso (sfruttando il concetto di \textbf{Barrier}). Questo vincolo assicura l'integrità del game loop.
+
+\subsubsection*{Rischi di Deadlock nelle Collisioni}
+La risoluzione concorrente su coppie condivise di palline richiede lock multipli. Senza una politica deterministica di acquisizione, due thread potrebbero ottenere i lock in ordine inverso, causando attesa circolare e quindi deadlock.
+
+Per prevenire questa condizione viene applicato un lock ordering globale sulle palline: i monitor sono acquisiti sempre nello stesso ordine logico. La validità della scelta è stata poi verificata formalmente con JPF \ref{sec:verifica_formale}.

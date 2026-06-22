@@ -1,0 +1,7 @@
+target = pcd.poool.jpf.TestCyclicBarrier
+
+classpath = target/jpf-classes
+
+vm.enable_assertions = true
+
+report.console.property_violation = error,trace

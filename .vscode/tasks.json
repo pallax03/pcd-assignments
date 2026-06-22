@@ -1,0 +1,48 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "latex: build image",
+      "type": "shell",
+      "command": "docker",
+      "args": [
+        "build",
+        "-t",
+        "pcd-latex",
+        "-f",
+        "${workspaceFolder}/Dockerfile",
+        "${workspaceFolder}"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "latex: compile active main (docker)",
+      "type": "shell",
+      "dependsOn": "latex: build image",
+      "dependsOrder": "sequence",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-v",
+        "${workspaceFolder}:/workspace",
+        "-w",
+        "/workspace/${relativeFileDirname}",
+        "pcd-latex",
+        "latexmk",
+        "-pdf",
+        "-interaction=nonstopmode",
+        "-halt-on-error",
+        "-file-line-error",
+        "-silent",
+        "-outdir=out",
+        "main.tex"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}

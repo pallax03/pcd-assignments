@@ -1,0 +1,41 @@
+\section{Exercise 3: Distributed Critical Sections with a Message-Oriented Middleware (RabbitMQ)}
+L'obiettivo dell'esercizio è la progettazione e implementazione di un middleware per la mutua esclusione distribuita, ho deciso di implementarlo con l'algoritmo di \textbf{Ricart-Agrawala}. L'architettura del sistema si fonda sui paradigmi della programmazione concorrente e distribuita, abbandonando l'approccio centralizzato in favore di una topologia \textbf{peer-to-peer}. Per far interagire i nodi attraverso la rete, è stato impiegato il message broker \textbf{RabbitMQ} come infrastruttura di comunicazione.
+
+\subsection{Analisi del Problema}
+Inizialmente è stata analizzata la tecnologia \textbf{RabbitMQ} e i suoi modelli di comunicazione, con particolare attenzione al paradigma \textbf{publish/subscribe}, con \textbf{routing}.
+In un sistema basato su code di messaggi di tipo publish/subscribe, il broker non mantiene uno storico dei messaggi distribuiti. Se un nodo si connetteva in ritardo, perdeva i messaggi di presentazione inviati precedentemente dagli altri partecipanti. Questo portava ad un problema di inconsistenza, sfasando il calcolo del numero totale di partecipanti attivi \texttt{N}, fondamentale per l'algoritmo al fine di attendere il corretto numero di permessi.
+
+\subsubsection{Analisi dell'Algoritmo di Ricart-Agrawala}
+L'analisi delle criticità si è concentrata sulle fondamenta teoriche dell'algoritmo di \textbf{Ricart-Agrawala}, e sull'adattamento all'interno di un'infrastruttura di rete reale e puramente asincrona. L'algoritmo impone che un nodo, per poter accedere alla Sezione Critica, debba inviare una richiesta in broadcast e ottenere il consenso esplicito \texttt{OK} da tutti gli altri $N-1$ partecipanti.
+\begin{figure}[hbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/agrawala.png}
+    \caption{Schema di funzionamento dell'algoritmo di Ricart-Agrawala}
+\end{figure}
+
+\subsubsection{Inizializzazione dinamica della rete}
+\label{discovery}
+Il problema fondamentale nell'implementazione dell'algoritmo è stato quello di definire il numero di partecipanti attivi $N$, in un sistema distribuito \textbf{senza memoria condivisa}. Poiché i nodi possono connettersi e disconnettersi in qualsiasi momento, è stato necessario progettare un meccanismo di discovery dinamico. 
+La soluzione adottata prevede che ogni nodo, al momento della connessione, invii un messaggio di presentazione \texttt{HELLO} in broadcast. 
+
+\subsubsection{Fairness delle richieste}
+L'algoritmo di \textbf{Ricart-Agrawala} basa la propria garanzia di \textbf{fairness} sulla capacità di stabilire un ordinamento totale delle richieste. Poiché nei sistemi distribuiti non è possibile avere un clock condiviso, è stato necessario analizzare la teoria delle \textbf{happened-before}, tramite l'uso di \textbf{Orologi Logici}.
+La criticità principale sorge in caso di richieste di accesso simultanee, se due o più nodi richiedono l'accesso alla sezione critica nello stesso istante, i loro clock logici risulteranno identici, invalidando la regola di precedenza standard. Era pertanto indispensabile progettare un meccanismo deterministico per i pareggi, per evitare violazioni della mutua esclusione e impedire che il sistema collassasse in un deadlock in cui i nodi si bloccavano a vicenda.
+
+\subsection{Design e Implementazione}
+La soluzione adottata separa rigorosamente la logica dell'algoritmo distribuito dalla gestione del trasporto dei messaggi, promuovendo un sistema reattivo e tollerante alle anomalie di rete.
+
+\subsubsection{Architettura di Rete a Topic}
+Per la comunicazione è stato utilizzato un unico exchange di tipo \textbf{TOPIC}. Ogni client dichiara una propria coda privata e la vincola all'exchange tramite due chiavi di routing: una per il broadcast \textbf{agrawala.broadcast} per intercettare le richieste globali, e una privata \textbf{agrawala.node.[ID]} per ricevere i messaggi di consenso \texttt{OK} da ogni singolo nodo.
+
+\subsubsection{Protocollo di Discovery Bidirezionale}
+Durante l'inizializzazione della rete \ref{discovery}, per ovviare al problema dei nodi ritardatari, è stato implementato un meccanismo di \textbf{ping} bidirezionale. 
+Quando la callback riceve un messaggio di \texttt{HELLO} da un nodo sconosciuto, non solo aggiorna dinamicamente la grandezza della rete $N$, ma risponde con un messaggio di \texttt{HELLO} inviando a sua volta la propria presentazione in broadcast. Questo garantisce la convergenza rapida e bidirezionale della topologia, allineando la vista di tutti i partecipanti.
+
+\subsubsection{Orologi Logici e Risoluzione dei Pareggi}
+L'ordinamento totale degli eventi è gestito tramite l'implementazione dei \textbf{Logical Clocks}. Durante l'invocazione di \texttt{enterCS()}, il middleware incrementa il proprio clock logico locale e lo registra come timestamp ufficiale della richiesta (\texttt{requestTimestamp}). In caso di richieste concorrenti, l'algoritmo confronta i relativi timestamp e, in presenza di un'esatta parità, utilizza l'ID del nodo come criterio di \textit{tie-breaking} deterministico, assegnando la precedenza al nodo con ID minore. 
+
+Se il nodo locale si trova in stato di richiesta e possiede la priorità rispetto alla \texttt{REQUEST} ricevuta, la risposta verso l'altro nodo viene posticipata (\textit{deferred}) e il suo ID, viene memorizzato nel Set \texttt{pendingNodes}. L'utilizzo di un Set garantisce l'unicità delle richieste pendenti ed evita la duplicazione dei permessi in uscita. Al contrario, se il nodo esterno ha la priorità (o se il nodo locale non è interessato alla sezione critica), il middleware invia immediatamente un messaggio di \texttt{OK}. I nodi temporaneamente differiti all'interno del Set verranno sbloccati tutti insieme inviando loro il relativo \texttt{OK} solo al momento dell'invocazione di \texttt{exitCS()}.
+
+\subsubsection{Sincronizzazione Locale dei Thread}
+Per proteggere lo stato interno del middleware dalle race condition, è stato fatto un uso attento della mutua esclusione locale. L'accesso alle variabili condivise tra il Main Thread e il Thread asincrono di RabbitMQ avviene all'interno di un blocco \texttt{synchronized(this)}. Tuttavia, per prevenire deadlock tra la ricezione dei messaggi e l'attesa del completamento dell'algoritmo distribuito, il blocco sincronizzato viene chiuso prima di mettere in pausa il thread applicativo su un \textbf{CountDownLatch}. Questo garantisce la thread-safety della logica, mantenendo al contempo la callback di rete sempre libera di processare nuovi messaggi.

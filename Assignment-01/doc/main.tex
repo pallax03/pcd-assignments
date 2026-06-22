@@ -1,0 +1,44 @@
+\documentclass{scrartcl}
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{natbib}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{tikz}
+\usepackage{float}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{cleveref}
+
+
+\newcommand{\emailaddr}[1]{\href{mailto:#1}{\texttt{#1}}}
+
+\title{\LARGE
+    \emph{Assignment-01 Report}\\
+    \emph{[Poool]}
+}
+\subtitle{Programmazione Concorrente e Distribuita [25-26]}
+
+\author{
+    Alex Mazzoni \\ \emailaddr{alex.mazzoni3@studio.unibo.it}
+}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+\input{sections/analysis.tex}
+\input{sections/design.tex}
+\newpage
+\input{sections/petri.tex}
+\newpage
+\input{sections/benchmark.tex}
+\newpage
+\input{sections/model_checking.tex}
+
+\end{document}

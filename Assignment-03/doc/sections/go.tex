@@ -1,0 +1,49 @@
+\section{Exercise 2: Odds-and-Evens Game (Go)}
+L'obiettivo dell'esercizio è la progettazione di un gioco basato sul paradigma ad attori, in cui $N = 2^m$ giocatori si sfidano in un torneo a eliminazione diretta, composto da $m$ round.
+Il vincolo principale è l'assenza di memoria condivisa, che impone una comunicazione esclusivamente tramite messaggi.
+
+\subsection{Analisi del Problema}
+Il design dell'approccio concorrente, è stato guidato dall'osservazione del torneo rappresentato come un albero binario completo, dove ogni nodo rappresenta una sfida tra due giocatori. I vincitori di ogni sfida avanzano al round successivo, fino a quando non rimane un solo vincitore finale.
+\input{figures/tournamentBoard.tex}
+
+\subsubsection{Struttura dei Canali}
+Analizzando lo schema di esempio in Figura \ref{fig:tournamentBoard} mostra come i giocatori in un ordine ben definito si sfidano in ogni round; I simboli $\text{'-'}$ e '\textbar' indicano una battaglia tra due giocatori (attori).
+
+Definiamo cosi che il numero di canali necessari per round, che equivale al numero di battaglie per round $r$, dato da $2^{m-r}$. 
+
+Con l'esempio rapprsentato in Figura \ref{fig:tournamentBoard} con $m=3$, al primo round $r=1$, avremo $2^{2}$ canali (P1 vs P2, P3 vs P4, P5 vs P6, P7 vs P8).
+E cosi via, fino al round finale $m$ dove avremo un solo canale per la sfida finale tra i due vincitori dei round precedenti.
+
+\subsubsection{Sincronizzazione e Deadlock}
+Per ogni battaglia gli attori utilizzeranno un unico canale, tale approccio in un ambiente con messaggi sincroni, introduce un potenziale rischio di deadlock.
+
+Se entrambi i giocatori coinvolti in una battaglia tentano di inviare un messaggio contemporaneamente, si bloccheranno reciprocamente, poiché entrambi attendono che l'altro riceva prima di poter procedere.
+
+Per risolvere questo problema, è necessario implementare una strategia di sincronizzazione che garantisca che in ogni battaglia ci sia sempre un giocatore che assuma il ruolo di \texttt{Server} (che attenda la ricezione del messaggio) e un giocatore che assuma il ruolo di \texttt{Client} (che invii il primo messaggio).
+
+In una rappresentazione ad albero binario (Figura \ref{fig:tournamentBoard}), possiamo notare che i giocatori che si sfidano provengono sempre o da destra o da sinistra, questo ci permette di definire una regola semplice per assegnare i ruoli.
+
+\subsection{Design e Implementazione}
+La soluzione implementata in Go utilizza un modello \textbf{decentralizzato (Symmetric Peer-to-Peer)} per le sfide, supportato da una fase di setup deterministica iniziale.
+
+\subsubsection{Routing Statico dei Canali}
+Per eliminare la necessità di un coordinatore centrale che smisti i messaggi dinamicamente, è stata creata una matrice di canali pre-allocata. Nel Flusso del \texttt{main}, vengono definiti i canali di battaglia per ogni giocatore calcolati in base al proprio ID.
+
+Ogni giocatore utilizza ad ogni round un canale diverso per comunicare con il proprio avversario, sta a lui calcolare dinamicamente se poi dovrà avanzare al round successivo o meno, in base alla propria vittoria o sconfitta.
+
+\subsubsection{Sincronizzazione tra Giocatori}
+Per risolvere il problema di deadlock, ogni attore calcola il proprio ruolo per il round corrente. Il loro ruolo viene determinato dalla posizione del giocatore nell'albero del torneo; I giocatori a sinistra assumono il ruolo di \textbf{Leader} (\texttt{Server}), e quelli a destra assumono il ruolo di \textbf{Follower} (\texttt{Client}):
+
+\begin{equation}
+    \text{isLeader} = (\left( \frac{\text{ID}}{2^r} \right) \mod 2 == 0)
+\end{equation}
+Questo esclude la possibilità di deadlock, poiché in ogni battaglia ci sarà sempre un giocatore che attende e uno che invia.
+
+\subsubsection{Svolgimento della battaglia}
+Durante ogni battaglia, il \textbf{Follower} genera un numero casuale tra 0 e 20. Il \textbf{Leader} riceve questa scelta e genera a sua volta un numero casuale. La somma dei due numeri determina il vincitore.
+Il giocatore a sinistra (\emph{Leader}) vince se la somma è pari, mentre il giocatore a destra (\emph{Follower}) vince se la somma è dispari. Il vincitore avanza al round successivo, mentre lo sconfitto termina il proprio flusso.
+
+\subsection{Conclusioni e Output}
+Il design decentralizzato ha semplificato la gestione dei canali, eliminando la necessità di un coordinatore centrale e permettendo a ogni giocatore di gestire autonomamente le proprie comunicazioni. 
+
+Un approccio centralizzato avrebbe permesso un'output più ordinato, ma avrebbe introdotto complessità aggiuntiva nella gestione dei canali e nella sincronizzazione, oltre a rappresentare un singolo punto di fallimento.

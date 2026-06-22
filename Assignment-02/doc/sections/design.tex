@@ -1,0 +1,29 @@
+\section{Design e Implementazione}
+Le tre versioni condividono solo il concetto di \textbf{Report}, ma sono state progettate con design differenti. Ho evitato di creare un'astrazione unica generica, perché avrebbe nascosto proprio le unicità di design tra \texttt{event-loop}, \texttt{programmazione reattiva} e \texttt{virtual threads}.
+
+\subsection{Struttura del report}
+Il \textbf{Report} contiene un numero specifico di fasce \textbf{NB}, il suo scopo è quello di tenere traccia del numero di file caduti in ciascuna fascia. L'ultima fascia rappresenta i file con dimensione maggiore o uguale a \textbf{MaxFS}. Il metodo \texttt{addFile} aggiorna il bucket, mentre \texttt{merge} somma due report con lo stesso numero di fasce (NB).
+
+I dati del report sono rappresentati con due vettori paralleli, i ranges visualizzati come stringa (es. \texttt{[0, 250)}, ovvero 0 incluso e 250 escluso) e per ogni range il numero di file che rientrano in quella fascia.
+I dati sono poi serializzati in JSON per essere visualizzati sia in console che in GUI.
+
+\subsection{Event-loop: Vert.x}
+\texttt{Future<Report>}. L'attraversamento della directory viene espresso come composizione di operazioni asincrone: prima si leggono le proprietà del path, poi, se il path è una directory, si leggono i figli e si compongono le loro \textbf{Promise}, traducendone in una singola Promise di \textbf{Report}.
+
+Il punto più importante di questa versione è non bloccare mai l'event-loop. Il codice non chiama \textbf{join}, \textbf{get} o sleep bloccanti. La ricorsione viene modellata con l'aggregazione delle promise (\textbf{compose} e \textbf{all}). Quando tutti i figli di una directory hanno completato, il padre crea un \textbf{Report} locale e fonde i report dei figli.
+
+Gli errori di accesso a un singolo nodo \ref{sec:else} sono gestiti con \textbf{recover}, pruducendo un report vuoto, senza interrompere l'intera elaborazione.
+
+\subsection{Programmazione reattiva: RxJava}
+\label{sec:rx}
+La scansione viene rappresentata come un flusso di file e successivamente mappata come un flusso di report progressivi. La funzione che genera l'albero restituisce un \texttt{Flowable<File>}, ogni file incontrato viene accumulato tramite \textbf{scan}, così il client può osservare non solo il report finale ma anche gli stati intermedi.
+
+\subsubsection{Implementazione Dinamica con GUI}
+Il design di \texttt{Rx} contiene anche il punto opzionale. La GUI Swing si iscrive alla pipeline e riceve aggiornamenti dinamici del grafico. Per evitare che il rendering venga saturato, la pipeline usa \texttt{onBackpressureLatest()} e la GUI applica \texttt{sample(20, TimeUnit.MILLISECONDS, true)}: se arrivano molti report intermedi, viene mantenuto solo quello piu recente.
+
+Lo stop è implementato tramite il \texttt{Disposable} restituito da \texttt{subscribe}. In questo modo l'interruzione non viene gestita con flag condivisi sparsi nel codice, ma sfruttando il modello di cancellazione della pipeline reattiva.
+
+\subsection{Virtual threads}
+La versione con \texttt{vthreads} usa \texttt{Executors.newVirtualThreadPerTaskExecutor()} e restituisce un \texttt{CompletableFuture<Report>}. La chiamata pubblica è asincrona: il client ottiene subito un future, mentre la visita del file system avviene in virtual thread.
+
+Per ogni figlio di una directory viene creato un task sullo stesso executor; Il task padre aspetta i figli con \textbf{join} e poi fonde tutti i report parziali. In una soluzione con platform thread questa forma rischierebbe di produrre thread bloccati in attesa. Invece quando un virtual thread attende, il carrier thread può essere riutilizzato dalla JVM.

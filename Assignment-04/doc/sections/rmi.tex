@@ -1,0 +1,39 @@
+\section{Exercise 2: Distributed Tic-Tac-Toe (Java - RMI)}
+L'obiettivo dell'esercizio è la progettazione e implementazione del gioco  Tic-Tac-Toe multiplayer. L'architettura del sistema si fonda sui paradigmi della programmazione concorrente e degli oggetti distribuiti. Per far interagire i giocatori attraverso la rete, è stato impiegato Java RMI come meccanismo RPC di base.
+
+\subsection{Analisi del Problema}
+Inizialmente sono state analizzate le criticità legate alla gestione di un server che deve far comunicare più client in tempo reale. I problemi principali si sono concentrati sulla concorrenza, sulla gestione della rete e sulla stabilità del sistema a lungo termine.
+
+\subsubsection{Sincronizzazione e Deadlock}
+Poiché il server RMI gestisce ogni richiesta in arrivo su un thread separato, più giocatori possono tentare di accedere allo stato della partita contemporaneamente. Questo richiede l'uso della mutua esclusione per proteggere la logica del gioco. Tuttavia, bloccare l'intero oggetto server durante una chiamata di rete verso un client introduceva un gravissimo rischio di deadlock.
+
+\subsubsection{Disconnessioni e "Stanze Zombie"}
+In un sistema distribuito basato su RMI, il server è intrinsecamente passivo: non si accorge se un client viene chiuso brutalmente finché non tenta di inviargli un messaggio. Questo rischiava di lasciare le Lobby occupate all'infinito da giocatori "fantasma", causando errori di tipo \texttt{GameFullException} per i nuovi giocatori ed esaurendo la memoria del server.
+Per questo motivo, si è reso necessario progettare un meccanismo proattivo per consentire al server di rilevare i guasti silenziosi e notificare tempestivamente i client rimasti bloccati in attesa del proprio turno.
+
+\subsubsection{Limiti di Serializzazione in Rete}
+RMI richiede che tutti i dati scambiati tra client e server vengano serializzati. Durante l'analisi, è emerso che alcune strutture dati moderne di Java, come \texttt{Optional<Player>} utilizzata per indicare il vincitore o il pareggio, non implementano l'interfaccia \textbf{Serializable} nativamente, causando il crash delle comunicazioni di rete con una \\\texttt{NotSerializableException}.
+
+\newpage
+\subsection{Design e Implementazione}
+La soluzione adottata separa rigorosamente la logica di gioco dalle comunicazioni di rete, promuovendo l'incapsulamento e garantendo un sistema reattivo e tollerante ai guasti.
+
+\subsubsection{Architettura a Callback (RPC Bidirezionale)}
+Il client esporta la propria interfaccia \textbf{RemoteClientListener} passandone il riferimento al server.
+In questo modo, il server può invocare attivamente i metodi del client per fornirgli aggiornamenti in tempo reale.
+Per garantire che questi messaggi di rete asincroni non bloccassero o corrompessero l'interfaccia grafica, ogni aggiornamento ricevuto dal listener viene delegato all'EDT utilizzando \texttt{SwingUtilities.invokeLater()}.
+
+\subsubsection{Heartbeat Asincrono e Rilevamento Guasti}
+Per ovviare alla natura passiva di RMI, è stato implementato il pattern \emph{Heartbeat}. All'interno di \textbf{RemoteGameImpl}, un \texttt{Timer} in background viene avviato non appena la lobby viene creata. A intervalli regolari, il timer invoca un metodo sui client connessi, che funge da ping. 
+
+Se l'invocazione RPC fallisce lanciando una \texttt{RemoteException}, il server deduce istantaneamente che il processo client è stato terminato in modo anomalo. A quel punto, il sistema notifica eventuali client superstiti, e invoca \textbf{closeGame()} per smantellare la lobby.
+
+\subsubsection{Sincronizzazione e Risorse Condivise}
+Per risolvere il problema dei deadlock menzionati in analisi, è stato applicato il pattern delle \emph{Open Calls}. Nei metodi del server (\textbf{RemoteGame} e \textbf{RemoteLobby}), l'accesso alle risorse condivise tra i vari client avviene all'interno di un blocco \texttt{synchronized(this)}.
+Tuttavia, prima di invocare i metodi di rete per notificare l'avversario o effettuare il ping, il blocco sincronizzato viene chiuso. Questo garantisce la thread-safety della logica del gioco, e mantenendo al contempo libere le chiamate di rete da attese bloccanti.
+
+\subsubsection{Ciclo di Vita, Registry e Pulizia Risorse}
+Il sistema gestisce autonomamente le proprie risorse di rete. L'avvio del registro RMI (\textbf{rmiregistry}) è stato integrato direttamente nel codice del server.
+Inoltre, per prevenire l'accumulo di stanze concluse, è stato implementato un meccanismo di auto-pulizia. Come accennato nel precedente paragrafo, sono state gestite granparte delle eccezioni di disconnessioni improvvise, soprattutto per liberare memoria dal server. 
+Nella distruzione di \textbf{closeGame()}, il \textbf{removeLobby(lobbyString, RemoteGame)} agisce rimuovendo se stessa dalla mappa della Lobby ed esegue \\
+\texttt{UnicastRemoteObject.unexportObject}, disconnettendosi definitivamente dalla rete.

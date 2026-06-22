@@ -1,0 +1,16 @@
+\begin{verbatim}
+                        || N. Threads (Peak) || % CPU (Avg) || FPS (Avg) ||
+Sketch01                ---------------------------------------------------
+  - minimal == large:   ||         22        ||      17     ||    120    ||
+  - massive:            ||         24        ||      16     ||     13    ||
+V1 ~ Sequential         ---------------------------------------------------
+  - minimal == large:   ||         24        ||       5     ||    120    ||
+  - massive:            ||         24        ||      22     ||     30    ||
+V1 ~ Multi-threaded     ---------------------------------------------------
+  - minimal == large:   ||         25        ||       7     ||    120    ||
+  - massive:            ||         31        ||      64     ||     60    ||
+V2 ~ Executor           ---------------------------------------------------
+  - minimal == large:   ||         32        ||       8     ||    120    ||
+  - massive:            ||         32        ||      68     ||     80    ||
+                              * Test da 3 minuti; FPS limitati a 120.
+\end{verbatim}

@@ -1,0 +1,17 @@
+\section{Verifica del Progetto}
+Oltre all'osservazione dei risultati di benchmark, è stata condotta una validazione formale del comportamento concorrente mediante \textbf{Java Pathfinder (JPF)}.
+
+JPF esplora sistematicamente i possibili interleaving di thread e permette di verificare proprietà di sicurezza e progresso su scenari ridotti ma rappresentativi.
+
+\subsection{Casi di Studio Applicati in JPF}
+\label{sec:verifica_formale}
+I test descritti in \texttt{/jpf/README.md} coprono quattro aree principali:
+\begin{itemize}
+    \item \textbf{\texttt{TestBoundedBufferSafety}:} valida la correttezza funzionale del buffer concorrente (nessuna perdita o duplicazione di elementi) e la consistenza tra conteggio di produzione e consumo.
+    
+    \item \textbf{\texttt{TestBoundedBufferPollNonBlocking}:} verifica la semantica di \texttt{poll(0)} usata dal Controller, imponendo ritorno immediato su coda vuota e comportamento corretto in presenza di item disponibili.
+    
+    \item \textbf{\texttt{TestCyclicBarrier}:} esamina la sincronizzazione della barriera ciclica, accertando che e che nessun thread venga risvegliato prima che tutti i worker abbiano raggiunto il punto di sincronizzazione.
+
+    \item \textbf{\texttt{TestCollisionDeadlock}:} stressa il meccanismo di lock ordering in presenza di collisioni incrociate tra più worker, verificando l'assenza di dipendenze cicliche sui monitor.
+\end{itemize}.

@@ -1,0 +1,40 @@
+\section{Exercise 1: Distributed Smart Home Alarm System (Scala - Pekko Cluster)}
+L'obiettivo dell'esercizio è l'estensione del sistema di allarme domestico precedentemente sviluppato, evolvendolo da un sistema locale a scambio di messaggi ad attori, ad un'architettura completamente distribuita basata su Apache Pekko Cluster. Il sistema mantiene intatti gli stati principali, ma il modo in cui i diversi attori vengono creati, è differente, in questa implementazione vengono istanziati su nodi differenti.
+
+\subsection{Analisi del Problema}
+Nel passaggio da un modello locale a uno distribuito, l'astrazione degli attori si è rivelata fondamentale, ma ha introdotto nuove sfide architetturali legate alla topologia della rete, alla scoperta dei servizi e alla tolleranza ai fallimenti dei singoli nodi.
+
+\subsubsection{Disaccoppiamento e Service Discovery}
+In un'architettura distribuita, la gerarchia rigida padre-figlio utilizzata per generare i sensori non è più applicabile, poiché la creazione diretta tramite \texttt{context.spawn} vincola gli attori alla medesima JVM (stesso nodo locale). È emersa quindi la necessità teorica di un meccanismo di \textit{Service Discovery} che permetta ai vari nodi di registrarsi e rintracciarsi dinamicamente all'interno della rete.
+
+\subsubsection{Gestione dello Stato e Sicurezza nel Recovery}
+Un nodo all'interno di un cluster può subire crash, partizioni di rete o essere riavviato intenzionalmente. Quando questo accade lo stato di memoria a stati del sistema di allarme principale (il Guardian), viene irrimediabilmente perso. 
+Il problema richiede pertanto la progettazione di una fase di \emph{Safe Recovery}, uno stato di isolamento fiduciario in cui il sistema sospende il suo funzionamento automatico, e richiede il PIN da parte dell'utente prima di riprendere il normale funzionamento.
+
+\subsubsection{Seed Nodes e Configurazione Dinamica}
+In un cluster Pekko, i nodi devono conoscere almeno un \textit{Seed Node} per poter effettuare il bootstrap e unirsi alla rete. Configurare un singolo nodo come seed introduce un \textit{Single Point of Failure} architetturale: se tale nodo dovesse fallire e venire riavviato, al suo risveglio non troverebbe altri seed a cui appoggiarsi, finendo per fondare un nuovo cluster isolato indipendente da quello superstite.
+
+\newpage
+\subsection{Design e Implementazione}
+Per affrontare queste sfide, è stata riprogettata l'architettura rimuovendo la dipendenza dal \textbf{SensorsManager} e \textbf{SensorsGroup}, sfruttando pienamente le primitive di routing e discovery di Pekko Cluster, i sensori vengono creati in modo distribuito.
+
+\subsubsection{Cluster Roles e Configurazione dei Nodi}
+Il Main \texttt{App.scala} è stato strutturato in modo da poter avviare nodi differenti basati sulla proprietà \textbf{AlarmSystemRoles}. Quando un nodo viene istanziato, assume un ruolo specifico \textbf{Guardian}, \textbf{Keypad}, \textbf{Siren}, \textbf{Sensor}, ovvero gli attori possibili.
+
+\subsubsection{Service Discovery tramite Receptionist}
+Il pattern utilizzato è quello di \textbf{Publish / Subcribe} grazie all'attore di sistema \textbf{Receptionist}. 
+Ogni entità passiva registra la propria \textbf{ServiceKey} al momento del setup. Contemporaneamente, gli attori che necessitano di inviare messaggi si iscrivono agli aggiornamenti di tali chiavi tramite un \texttt{messageAdapter}. 
+
+Nel \textbf{KeypadActor}, questo meccanismo è stato sfruttato per implementare un comportamento reattivo, esso è inizializzato in uno stato di \texttt{waitingForGuardian} e transita allo stato \texttt{ready} solo quando riceve una \textbf{Receptionist.Listing} che attesta la presenza di almeno un Guardian, evitando di inviare PIN a vuoto.
+
+\subsubsection{Implementazione del Safe Recovery Mode}
+Per soddisfare i requisiti di tolleranza ai guasti, la macchina a stati del \textbf{AlarmSystemGuardian} è stata dotata di un nuovo stato iniziale \texttt{recovery}.
+Al momento dell'avvio (o riavvio), l'attore entra in questo stato sicuro.
+Solo alla ricezione del comando \texttt{VerifyPin} contenente la password corretta, il Guardian transita nello stato operativo \texttt{disarmed}.
+
+\subsubsection{Serializzazione dei Messaggi}
+Poiché i messaggi ora viaggiano su rete TCP/UDP tra nodi clusterizzati, abbiamo marcato tutti i messaggi (\textbf{Command}) e gli eventi di dominio tramite il trait \texttt{CborSerializable}. Questo indica a Pekko di utilizzare la serializzazione Jackson CBOR.
+
+\subsubsection{Gestione dei Seed Nodes}
+A livello infrastrutturale, la tolleranza ai fallimenti improvvisi è garantita dall'integrazione dello \textit{Split-Brain Resolver (SBR)} fornito nativamente da Pekko. Configurando la strategia di \texttt{keep-majority}.
+Per permettere ai nodi di mantenere lo stesso cluster, la configurazione condivisa (in \texttt{application.conf}) è stata strutturata per definire un elenco di seed nodes multipli (porte 2551 e 2552). In questo modo, il crash di un singolo nodo fondatore non distrugge la membership del cluster, e al suo riavvio esso utilizzerà il seed secondario superstite per ricongiungersi correttamente alla rete esistente.

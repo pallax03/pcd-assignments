@@ -1,0 +1,25 @@
+\section{Analisi del Problema}
+L'obiettivo dell'assignment è progettare una libreria \texttt{FSStatLib} capace di produrre asincronamente un report sulle dimensioni dei file contenuti in una directory, includendo ricorsivamente tutte le sottodirectory. Il problema è apparentemente semplice: visitare un albero, leggere la dimensione dei file e aggiornare dei contatori. Dal punto di vista concorrente però diventa interessante perché la visita del file system è un'attività fortemente I/O-bound, con profondità e ampiezza non note a priori.
+
+\subsection{Asincronia e ricorsione}
+La chiamata alla libreria non deve congelare il chiamante mentre l'albero viene esplorato. Questo è particolarmente importante come nel caso della versione \texttt{Rx}, in cui avremo che il client è una GUI. \ref{sec:rx}
+
+La difficoltà non è solo 'spostare il lavoro su un thread'. Effettuare una scansione ricorsiva, permette ogni directory di essere esplorata indipendentemente, e per ogni file produrre un piccolo contributo al report. Il design deve quindi permettere parallelismo, evitando l'utilizzo di una struttura globale condivisa, tra tutti i thread.
+
+\subsection{Composizione dei risultati (Report)}
+Ogni directory visitata produce un \textbf{Report} e i risultati vengono poi fusi tramite \textbf{merge} tra le altre directory. 
+Ogni task lavora su una propria istanza locale e la composizione avviene solo quando il padre raccoglie i risultati dei figli.
+
+Questa scelta riduce il rischio di race e mantiene la logica del \textbf{Report} riutilizzabile, la concorrenza sta nell'esplorazione dell'albero, non nella gestione dello stato condiviso. In questo modo si adotta un design più semplice, senza appunto dover introdurre meccanismi di sincronizzazione complessi.
+
+\subsection{Gestione Eccezioni e directory non leggibili}
+\label{sec:else}
+Durante lo sviluppo della versione \texttt{event-loop}, è emerso il primo problema. In caso in cui si presentino: una directory non leggibile o un path speciale, è necessario gestirli e non far fallire l'intero report.
+
+Le implementazioni gestiscono i nodi non leggibili e restituiscono un report vuoto per quel sottoalbero.
+
+\subsection{Aggiornamenti dinamici e backpressure}
+Il punto opzionale richiede aggiornamenti dinamici e la possibilità di stop. È stato implementato nella versione \texttt{Rx}, poichè l'utilizzo del pattern \textbf{Observable} ha reso piuttosto semplice l'intercettazione dei singoli report nel tempo.
+
+Il problema principale durante lo sviluppo del punto opzionale, è stato il disaccoppiamento tra produttore e consumatore.
+Come accennato a lezione, la scansione può produrre aggiornamenti molto più velocemente di quanto Swing possa ridisegnare la GUI (consumare). Senza una politica esplicita si accumulano eventi inutili oppure si degrada la reattività. Per questo la pipeline usa \textbf{Flowable}, \texttt{onBackpressureLatest()} e un campionamento temporale prima del rendering.

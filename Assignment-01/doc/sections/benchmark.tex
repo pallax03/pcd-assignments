@@ -1,0 +1,25 @@
+\section{Benchmark e Performance}
+Per validare l'efficacia delle strategie implementate, sono stati eseguiti test su tre scenari (\emph{minimal, large, massive}) monitorando numero di thread, utilizzo medio CPU e frame-rate medio.
+
+\input{figures/benchmarks.tex}
+
+\subsection{Analisi dei Risultati}
+\label{sec:benchmark_risultati}
+I dati mostrano con chiarezza i limiti delle due versioni soprattutto nello scenario \textbf{massive}:
+\begin{itemize}
+    \item \textbf{V1 Multithreading: barriere cicliche.} Nonostante l'implementazione con barriere cicliche, si raggiunge un frame-rate medio di 50 FPS, con un utilizzo CPU del 64\%, evidenziando un miglioramento rispetto alla versione sequenziale ma con margini di ottimizzazione.
+    
+    \item \textbf{V2 Executor: migliore scalabilità pratica.} Con partizionamento in chunk e \emph{invokeAll}, la sincronizzazione è ridotta alla barriera finale. Si raggiunge il 68\% di CPU media e 80 FPS, migliorando nettamente rispetto all'approccio sequenziale (13 FPS).
+\end{itemize}
+
+\newpage
+\subsection{Confronto con Speedup}
+La metrica di riferimento è: $ S_p = \frac{T_s}{T_p} $. 
+Qui $T_s$ è il tempo della baseline sequenziale e $T_p$ il tempo della variante parallela. Non avendo riportato i tempi diretti, a parità di scenario si può usare l'approssimazione tramite frame-rate, valida solo se non ci sono limiti sugli FPS:
+\[ S_p \approx \frac{\text{FPS}_p}{\text{FPS}_s} \]
+Utilizziamo quindi questa relazione nello scenario \textbf{massive}:
+\begin{itemize}
+    \item \texttt{V2} rispetto a \texttt{V1} (Multithreading): $S_{V2/V1} \approx \frac{80}{50} = 1.6 $;
+    \item \texttt{V2} rispetto alla baseline sequenziale \texttt{sketch01}: $S_p \approx \frac{80}{13} \approx 6.15 $.
+\end{itemize}
+Questi risultati evidenziano un miglioramento significativo: \texttt{V2} ottiene circa $1.6\times$ rispetto a \texttt{V1} e oltre $6.15\times$ rispetto alla baseline sequenziale, confermando l'efficacia dell'approccio task-based.
