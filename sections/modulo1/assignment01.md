@@ -1,3 +1,6 @@
+---
+layout: math
+---
 # Teoria Assignment-01
 
 Generated File with AI

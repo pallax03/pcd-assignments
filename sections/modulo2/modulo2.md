@@ -1,3 +1,6 @@
+---
+layout: math
+---
 # Modulo 2: Asynchronous & Reactive Programming
 
 ## I Limiti del Multithreading Tradizionale

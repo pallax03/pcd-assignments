@@ -1,3 +1,6 @@
+---
+layout: math
+---
 # Modulo 1: Multithreading and Fundamentals
 
 ## Introduzione e Proprietà Fondamentali
@@ -133,7 +136,7 @@ Dato che i semafori sono primitive a basso livello, molto generici, sono utilizz
 ### Locks -> Critical Sections Problem
 
 k-value = 1, cosi che solo un processo alla volta passa alla wait, gli altri processi devono aspettare la signal, si usa per questo un semaforo binario.
-![critical_section](/images/locks.webp)
+![critical_section](./images/locks.webp)
 
 Attenzione, possiamo notare con lo state diagram (grafo di raggiungibilità) che c'è mutual exclusion, free from deadlock and starvation.
 MA in casi di N processi, un processo potrebbe essere penalizzato all'inifinito, causando **starvation**, per questo è importante utilizzare soluzioni come *strong* semaphores, o l'algoritmo dei fornai / ticket.
@@ -199,7 +202,7 @@ Il problema dei lettori e scrittori è un classico problema di sincronizzazione 
 
 La soluzione attraverso i monitor, prevede l'utilizzo di due condition variables, una per i lettori e una per gli scrittori, oltre al numero di lettori e scrittori.
 
-![readers and writers implementation](/images/readers-and-writers.webp)
+![readers and writers implementation](./images/readers-and-writers.webp)
 
 ### Barrier / Latch (Rendezvous Problem)
 

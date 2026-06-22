@@ -1,3 +1,6 @@
+---
+layout: math
+---
 # Modulo 4: Distributed Computing
 
 ## Fondamenti e Sfide dei Sistemi Distribuiti
@@ -43,7 +46,7 @@ Per modellare il comportamento e ragiornare sulla correttezza di un sistema dist
 
 Come possiamo ordinare gli eventi? In un contesto completamente asincrono e distribuito?
 
-![Happened-Before](/images/happened-before.webp)
+![Happened-Before](./images/happened-before.webp)
 
 Nell'esempio riportato nell'immagine, due nodi `p` e `q`, scambiano messaggi tra di loro.
 
@@ -101,7 +104,7 @@ Viene introdotto un nodo coordinatore, che ha il compito esclusivo di assegnare 
 
 > L'approccio soffre di **Single Point of Failure**, se il coordinatore si guasta, l'intero sistema si blocca.
 
-![Mutual Exclusion Coordinator](/images/mutual_exclusion-coordinator.webp)
+![Mutual Exclusion Coordinator](./images/mutual_exclusion-coordinator.webp)
 
 Prendendo come esempio l'immagine riportata, a destra abbiamo un caso ottimale in cui non ci sono **problemi di fairness**, le richieste avvengono senza alcun intreccio.
 
@@ -120,7 +123,7 @@ La soluzione è quella di utilizzare i **vector clocks**, ogni processo mantiene
 Per ovviare ai limiti dell'approccio centralizzato, è possibile adottare un approccio decentralizzato.
 Ogni processo, quando vuole accedere alla sezione critica, invia una richiesta a tutti gli altri processi, e attende di ricevere una risposta `OK` da tutti prima di procedere.
 
-![Mutual Exclusion Decentalized](/images/mutual_exclusion-ricart_agrawala.webp)
+![Mutual Exclusion Decentalized](./images/mutual_exclusion-ricart_agrawala.webp)
 
 Per garantire la **fairness**, non è necessario l'implementazione di **vector clock**, è sufficiente un **logical clock**.
 
@@ -160,7 +163,7 @@ Il nodo ricevente confronta l'id ricevuto con il proprio, e se il proprio id è 
 
 In un sistema distribuito, i messaggi possono arrivare in ordine diverso da quello di invio, a causa della natura asincrona della rete. Per garantire la correttezza del sistema, è necessario implementare meccanismi di **ordinamento dei messaggi**.
 
-![Message Ordering & Matrix Clock](/images/matrix_clock.webp)
+![Message Ordering & Matrix Clock](./images/matrix_clock.webp)
 
 La figura mostra un esempio di **Matrix Clock**, che estende il concetto di **Vector Clock** per fornire informazioni più dettagliate sull'ordinamento dei messaggi tra i processi, mostrando:
 
